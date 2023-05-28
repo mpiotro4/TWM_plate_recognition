@@ -1,0 +1,5 @@
+yolov4-tiny.weights
+yolov4.weights
+TWM_plate.weights
+test/
+.idea
