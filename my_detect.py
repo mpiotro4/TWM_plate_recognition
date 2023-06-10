@@ -17,14 +17,42 @@ from tensorflow.compat.v1 import InteractiveSession
 import os
 import glob
 
-def main(images, dont_show=False):
-    input_size = 416
-    iou = 0.45
-    score = 0.25
+# helper function to convert bounding boxes from normalized ymin, xmin, ymax, xmax ---> xmin, ymin, xmax, ymax
+def format_boxes(bboxes, image_height, image_width):
+    for box in bboxes:
+        ymin = int(box[0] * image_height)
+        xmin = int(box[1] * image_width)
+        ymax = int(box[2] * image_height)
+        xmax = int(box[3] * image_width)
+        box[0], box[1], box[2], box[3] = xmin, ymin, xmax, ymax
+    return bboxes
+def crop_objects(img, data, path, allowed_classes, img_number):
+    boxes, scores, classes, num_objects = data
+    class_names = ['license_plate']
+    #create dictionary to hold count of objects for image name
+    counts = dict()
+    for i in range(num_objects):
+        # get count of class for part of image name
+        class_index = int(classes[i])
+        class_name = class_names[class_index]
+        if class_name in allowed_classes:
+            counts[class_name] = counts.get(class_name, 0) + 1
+            # get box coords
+            xmin, ymin, xmax, ymax = boxes[i]
+            # crop detection from image (take an additional 5 pixels around all edges)
+            cropped_img = img[int(ymin)-1:int(ymax)+1, int(xmin)-1:int(xmax)+1]
+            # construct image name and join it to path for saving crop properly
+            img_name = img_number + "_" + class_name + '_' + str(counts[class_name]) + '.png'
+            img_path = os.path.join(path, img_name )
+            # save image
+            cv2.imwrite(img_path, cropped_img)
+        else:
+            continue
 
+def main(images, dont_show=False):
     config = ConfigProto()
     config.gpu_options.allow_growth = True
-    session = InteractiveSession(config=config)
+    InteractiveSession(config=config)
     saved_model_loaded = tf.saved_model.load("./checkpoints/custom-416", tags=[tag_constants.SERVING])
 
     # loop through images in list and run Yolov4 model on each
@@ -32,7 +60,7 @@ def main(images, dont_show=False):
         original_image = cv2.imread(image_path)
         original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
 
-        image_data = cv2.resize(original_image, (input_size, input_size))
+        image_data = cv2.resize(original_image, (416, 416))
         image_data = image_data / 255.
 
         images_data = []
@@ -53,31 +81,27 @@ def main(images, dont_show=False):
                 pred_conf, (tf.shape(pred_conf)[0], -1, tf.shape(pred_conf)[-1])),
             max_output_size_per_class=50,
             max_total_size=50,
-            iou_threshold=iou,
-            score_threshold=score
+            iou_threshold=0.45,
+            score_threshold=0.25
         )
         pred_bbox = [boxes.numpy(), scores.numpy(), classes.numpy(), valid_detections.numpy()]
 
-        # read in all class names from config
-        class_names = utils.read_class_names(cfg.YOLO.CLASSES)
-
-        # by default allow all classes in .names file
-        allowed_classes = list(class_names.values())
-
-        # custom allowed classes (uncomment line below to allow detections for only people)
-        # allowed_classes = ['person']
-
-        image = utils.draw_bbox(original_image, pred_bbox, allowed_classes=allowed_classes)
+        image = utils.draw_bbox(original_image, pred_bbox, allowed_classes=['license_plate'])
 
         image = Image.fromarray(image.astype(np.uint8))
         if not dont_show:
             image.show()
         image = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
-        cv2.imwrite("./detections/" + 'XD' + str(count) + '.png', image)
+        cv2.imwrite("./detections/" + 'detection' + str(count) + '.png', image)
+
+        original_h, original_w, _ = original_image.shape
+        bboxes = format_boxes(boxes.numpy()[0], original_h, original_w)
+        pred_bbox = [bboxes, scores.numpy()[0], classes.numpy()[0], valid_detections.numpy()[0]]
+        crop_objects(image, pred_bbox, "./detections/crop/", ['license_plate'], 'detection' + str(count))
 
 
 if __name__ == '__main__':
     images = glob.glob(os.path.join("./data/test", "*.jpg"))
     print(images[:10])
-    app.run(main(images=images[:10], dont_show=True))
+    main(images=images[:10], dont_show=True)
     print("done")
