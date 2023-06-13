@@ -16,6 +16,7 @@ from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
 import os
 import glob
+from OCR.read_plate import read_plates
 
 # helper function to convert bounding boxes from normalized ymin, xmin, ymax, xmax ---> xmin, ymin, xmax, ymax
 def format_boxes(bboxes, image_height, image_width):
@@ -31,6 +32,7 @@ def crop_objects(img, data, path, allowed_classes, img_number):
     class_names = ['license_plate']
     #create dictionary to hold count of objects for image name
     counts = dict()
+    cropped_imgs = []
     for i in range(num_objects):
         # get count of class for part of image name
         class_index = int(classes[i])
@@ -46,8 +48,10 @@ def crop_objects(img, data, path, allowed_classes, img_number):
             img_path = os.path.join(path, img_name )
             # save image
             cv2.imwrite(img_path, cropped_img)
+            cropped_imgs.append(cropped_img)
         else:
             continue
+    return cropped_imgs
 
 def main(images, dont_show=False):
     config = ConfigProto()
@@ -84,9 +88,19 @@ def main(images, dont_show=False):
             iou_threshold=0.45,
             score_threshold=0.25
         )
-        pred_bbox = [boxes.numpy(), scores.numpy(), classes.numpy(), valid_detections.numpy()]
 
-        image = utils.draw_bbox(original_image, pred_bbox, allowed_classes=['license_plate'])
+
+        original_h, original_w, _ = original_image.shape
+        bboxes = format_boxes(boxes.numpy()[0], original_h, original_w)
+        pred_bbox = [bboxes, scores.numpy()[0], classes.numpy()[0], valid_detections.numpy()[0]]
+        cropped_imgs = crop_objects(original_image, pred_bbox, "./detections/crop/", ['license_plate'],
+                                    'detection' + str(count))
+        plates = read_plates(cropped_imgs)
+        print(plates)
+
+
+        pred_bbox = [boxes.numpy(), scores.numpy(), classes.numpy(), valid_detections.numpy()]
+        image = utils.draw_bbox(plates, original_image, pred_bbox, allowed_classes=['license_plate'])
 
         image = Image.fromarray(image.astype(np.uint8))
         if not dont_show:
@@ -94,14 +108,9 @@ def main(images, dont_show=False):
         image = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
         cv2.imwrite("./detections/" + 'detection' + str(count) + '.png', image)
 
-        original_h, original_w, _ = original_image.shape
-        bboxes = format_boxes(boxes.numpy()[0], original_h, original_w)
-        pred_bbox = [bboxes, scores.numpy()[0], classes.numpy()[0], valid_detections.numpy()[0]]
-        crop_objects(image, pred_bbox, "./detections/crop/", ['license_plate'], 'detection' + str(count))
-
 
 if __name__ == '__main__':
     images = glob.glob(os.path.join("./data/test", "*.jpg"))
-    print(images[:10])
-    main(images=images[:10], dont_show=True)
+    print(images[:1])
+    main(images=images[:1], dont_show=True)
     print("done")
