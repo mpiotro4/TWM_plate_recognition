@@ -42,7 +42,11 @@ def crop_objects(img, data, path, allowed_classes, img_number):
             # get box coords
             xmin, ymin, xmax, ymax = boxes[i]
             # crop detection from image (take an additional 5 pixels around all edges)
-            cropped_img = img[int(ymin)-1:int(ymax)+1, int(xmin)-1:int(xmax)+1]
+            if int(ymin) > 5 and int(xmin) > 5:
+                cropped_img = img[int(ymin)-5:int(ymax)+5, int(xmin)-5:int(xmax)+5]
+            else:
+                cropped_img = img[int(ymin):int(ymax)+5, int(xmin):int(xmax)+5]
+
             # construct image name and join it to path for saving crop properly
             img_name = img_number + "_" + class_name + '_' + str(counts[class_name]) + '.png'
             img_path = os.path.join(path, img_name )
@@ -111,6 +115,6 @@ def main(images, dont_show=False):
 
 if __name__ == '__main__':
     images = glob.glob(os.path.join("./data/test", "*.jpg"))
-    print(images[:1])
-    main(images=images[:1], dont_show=True)
+    print(images[0:1])
+    main(images=images[0:1], dont_show=True)
     print("done")
