@@ -1,10 +1,5 @@
 import colorsys
-
 import tensorflow as tf
-
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
-if len(physical_devices) > 0:
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 from tensorflow.python.saved_model import tag_constants
 from PIL import Image
 import cv2
@@ -15,7 +10,6 @@ import os
 import glob
 from OCR.read_plate import read_plates
 
-# helper function to convert bounding boxes from normalized ymin, xmin, ymax, xmax ---> xmin, ymin, xmax, ymax
 def format_boxes(bboxes, image_height, image_width):
     for box in bboxes:
         ymin = int(box[0] * image_height)
@@ -24,7 +18,6 @@ def format_boxes(bboxes, image_height, image_width):
         xmax = int(box[3] * image_width)
         box[0], box[1], box[2], box[3] = xmin, ymin, xmax, ymax
     return bboxes
-
 
 def draw_bbox(plate_numbers, image, bboxes):
     image_h, image_w, _ = image.shape
@@ -87,10 +80,7 @@ def crop_objects(img, data, path, allowed_classes, img_number):
     return cropped_imgs
 
 def main(images, dont_show=False):
-    config = ConfigProto()
-    config.gpu_options.allow_growth = True
-    InteractiveSession(config=config)
-    saved_model_loaded = tf.saved_model.load("./checkpoints/custom-416", tags=[tag_constants.SERVING])
+    saved_model_loaded = tf.saved_model.load("./checkpoints/twm_plates")
 
     # loop through images in list and run Yolov4 model on each
     for count, image_path in enumerate(images, 1):
@@ -99,14 +89,10 @@ def main(images, dont_show=False):
 
         image_data = cv2.resize(original_image, (416, 416))
         image_data = image_data / 255.
-
-        images_data = []
-        for i in range(1):
-            images_data.append(image_data)
-        images_data = np.asarray(images_data).astype(np.float32)
+        image_data = np.expand_dims(image_data, axis=0).astype(np.float32)
 
         infer = saved_model_loaded.signatures['serving_default']
-        batch_data = tf.constant(images_data)
+        batch_data = tf.constant(image_data)
         pred_bbox = infer(batch_data)
         for key, value in pred_bbox.items():
             boxes = value[:, :, 0:4]
@@ -128,7 +114,7 @@ def main(images, dont_show=False):
         pred_bbox = [bboxes, scores.numpy()[0], classes.numpy()[0], valid_detections.numpy()[0]]
         cropped_imgs = crop_objects(original_image, pred_bbox, "./detections/crop/", ['license_plate'],
                                     'detection' + str(count))
-        plates = read_plates(cropped_imgs)
+        plates = read_plates(cropped_imgs, dont_show)
         print(plates)
 
 
@@ -144,6 +130,6 @@ def main(images, dont_show=False):
 
 if __name__ == '__main__':
     images = glob.glob(os.path.join("./data/test", "*.jpg"))
-    print(images[0:100])
-    main(images=images[0:100], dont_show=True)
+    print(images[0:1])
+    main(images=images[0:1], dont_show=False)
     print("done")

@@ -1,0 +1,1 @@
+python save_model.py --weights ./data/TWM_plate.weights --output ./checkpoints/twm_plates --input_size 416 --model yolov4

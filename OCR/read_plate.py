@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+from PIL import Image
+
 from OCR.what_letter import what_letter
 
 kernel = np.array([[1,1,1],
@@ -17,7 +19,7 @@ def return_string(lista):
     return string
 
 
-def read_plate(image):
+def read_plate(image, dont_show=True):
     
     # Przekształć obraz na skalę szarości
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -44,6 +46,9 @@ def read_plate(image):
 
     contours, _ = cv2.findContours(binary_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
+    img = Image.fromarray(binary_image.astype(np.uint8))
+    if not dont_show:
+        img.show()
     # cv2.imshow('0', binary_image)
     # cv2.waitKey(0)
 
@@ -84,10 +89,10 @@ def read_plate(image):
 
     return string
 
-def read_plates(plates):
+def read_plates(plates, dont_show=True):
     strings = []
     for plate in plates:
-        string = read_plate(plate)
+        string = read_plate(plate, dont_show)
         strings.append(string)
     return strings
 
